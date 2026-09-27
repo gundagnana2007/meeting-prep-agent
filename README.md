@@ -15,7 +15,7 @@ Article, social post, and video materials are kept separately from this code rep
 
 - **Streamlit** displays the form and briefing in a browser.
 - **Hindsight `retain`** saves each dated meeting record, including explicit updates to earlier commitments and new follow-ups.
-- **Hindsight `reflect`** compares matching memories over time and prepares a briefing with dates, changes, and open questions.
+- **Hindsight `retain`** tags each record with a stable, contact-specific identifier. **Hindsight `reflect`** applies a strict tag filter, then compares that contact's dated memories and prepares a briefing with dates, changes, and open questions.
 - The briefing marks a commitment complete only when a later note explicitly confirms it. The interface shows the memories used so you can check the evidence.
 - The first version does not read calendars, send email, or schedule meetings.
 
@@ -69,7 +69,9 @@ Prepare again with the same question. The briefing should now show the rollout p
 
 ## Contact matching and data handling
 
-Each record includes the contact name and a normalized matching key, and the Reflect query requests memories only for that contact. This helps organize a shared memory bank, but prompt instructions are not an access-control boundary. Do not store sensitive customer information in a shared bank unless its access controls are appropriate for your use case. For production, enforce tenant/contact isolation in the data layer and test it with contacts that have similar names.
+Each new record includes the contact name and a normalized matching key, and Hindsight stores it under a stable hashed contact tag. Briefings use Hindsight's strict tag matching, which filters the retrieved memory scope as well as naming the contact in the prompt. It is retrieval scoping, not user authorization: anyone who can use this app and its memory bank can request a briefing for a contact. For a multi-user production service, derive the allowed tag from the authenticated user's permissions and enforce access at the server.
+
+Records saved before contact tags were added are untagged and will not appear in strict scoped briefings. Re-save older meeting notes through the app to add their contact tags.
 
 ## Keep in mind
 

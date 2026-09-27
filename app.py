@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from datetime import date
@@ -21,15 +22,42 @@ def connect(base_url: str, api_key: str) -> Hindsight:
 
 def source_text(source: object) -> str:
     for field in ("text", "content"):
-        value = getattr(source, field, None)
+        value = source.get(field) if isinstance(source, dict) else getattr(source, field, None)
         if value:
             return str(value)
     return str(source)
 
 
 def source_date(source: object) -> str | None:
+    for field in ("occurred_start", "occurred_end", "mentioned_at"):
+        value = source.get(field) if isinstance(source, dict) else getattr(source, field, None)
+        if value:
+            match = re.search(r"\d{4}-\d{2}-\d{2}", str(value))
+            if match:
+                return match.group(0)
     match = re.search(r"Meeting date:\s*(\d{4}-\d{2}-\d{2})", source_text(source), re.IGNORECASE)
     return match.group(1) if match else None
+
+
+def contact_tag(contact: str) -> str:
+    normalized = " ".join(contact.casefold().split())
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:24]
+    return f"meeting-contact-{digest}"
+
+
+def source_items(answer: object) -> list[object]:
+    based_on = getattr(answer, "based_on", None)
+    if based_on is None:
+        return []
+    if isinstance(based_on, list):
+        return based_on
+    if isinstance(based_on, dict):
+        memories = based_on.get("memories")
+    else:
+        memories = getattr(based_on, "memories", None)
+    if memories is not None:
+        return list(memories)
+    return [based_on]
 
 
 def credentials_error(api_key: str, bank_id: str) -> str | None:
@@ -141,6 +169,10 @@ with st.sidebar:
         help="Choose the Hindsight bank where these meeting notes should live.",
     )
     st.caption("Your API key stays masked in this field. The app does not write it to a file.")
+    st.info(
+        "New meeting records are tagged to their contact, and briefings filter by that tag. "
+        "Re-save older notes once to add the contact tag."
+    )
 
 save_tab, prepare_tab = st.tabs(["📝  Add meeting notes", "✨  Prepare for a meeting"])
 
@@ -205,6 +237,7 @@ with save_tab:
                         bank_id=bank_id.strip(),
                         content=content,
                         context=f"Meeting notes with {contact.strip()} on {meeting_date.isoformat()}",
+                        tags=[contact_tag(contact)],
                     )
                 st.success(
                     f"Saved the {meeting_date.isoformat()} meeting with {contact.strip()}. "
@@ -291,7 +324,13 @@ with prepare_tab:
             )
             try:
                 with st.spinner("Finding the right conversation memories…"):
-                    answer = connect(base_url, api_key).reflect(bank_id=bank_id.strip(), query=query)
+                    answer = connect(base_url, api_key).reflect(
+                        bank_id=bank_id.strip(),
+                        query=query,
+                        tags=[contact_tag(prep_contact)],
+                        tags_match="all_strict",
+                        include_facts=True,
+                    )
                 st.markdown("### Your briefing")
                 st.markdown(
                     '<div class="soft-note">Compare the dates and source memories. A promise is complete only when a later note explicitly confirms it.</div>',
@@ -299,7 +338,7 @@ with prepare_tab:
                 )
                 st.markdown(getattr(answer, "text", str(answer)))
 
-                sources = getattr(answer, "based_on", None)
+                sources = source_items(answer)
                 if sources:
                     with st.expander("🧭  Memory timeline and sources"):
                         ordered_sources = sorted(

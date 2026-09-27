@@ -1,6 +1,6 @@
 # Meeting Prep Agent
 
-A beginner-friendly web app that stores meeting notes in Hindsight and uses Hindsight Reflect to prepare a briefing before a later meeting. The briefing can include previous concerns, decisions, promises, and follow-ups.
+A beginner-friendly web app that stores dated meeting records in Hindsight and uses Hindsight Reflect to prepare a briefing before a later meeting. It tracks what was promised, what a later conversation confirmed, and what remains unknown.
 
 The interface uses a warm, matte palette with animated pastel accents. It has separate tabs for saving meeting notes and preparing for the next conversation.
 
@@ -14,8 +14,9 @@ Article, social post, and video materials are kept separately from this code rep
 ## How the pieces work
 
 - **Streamlit** displays the form and briefing in a browser.
-- **Hindsight `retain`** saves each meeting's notes in your memory bank.
-- **Hindsight `reflect`** retrieves relevant memories and uses its configured LLM to write a briefing.
+- **Hindsight `retain`** saves each dated meeting record, including explicit updates to earlier commitments and new follow-ups.
+- **Hindsight `reflect`** compares matching memories over time and prepares a briefing with dates, changes, and open questions.
+- The briefing marks a commitment complete only when a later note explicitly confirms it. The interface shows the memories used so you can check the evidence.
 - The first version does not read calendars, send email, or schedule meetings.
 
 ## Requirements
@@ -46,17 +47,29 @@ Article, social post, and video materials are kept separately from this code rep
 
 Hindsight Cloud setup instructions are in the [Getting Started guide](https://docs.hindsight.vectorize.io/getting-started/). The API URL defaults to `https://api.hindsight.vectorize.io`; change it in the sidebar if you use another Hindsight instance.
 
-## Try this fictional example
+## Try the two-meeting memory loop
 
-Save these notes for **Northstar Foods**:
+Use **Northstar Foods** for both records. Save a meeting dated `2026-09-27` with these notes:
 
-> They are concerned setup may interrupt their busy season. I promised to send a rollout plan by Friday. They prefer a short product demo.
+> They are worried setup may interrupt their busy season and prefer a phased rollout.
 
-Then save a second meeting:
+Under **New promises and follow-ups**, enter:
 
-> They liked the demo. They want setup finished before June. I agreed to send the rollout plan by Friday.
+> I will send a rollout plan by 2026-10-02.
 
-Ask the app to prepare you for a meeting with **Northstar Foods**, focusing on promises, concerns, and follow-ups. It should use the notes stored in Hindsight to build the briefing. Results depend on the notes retained and Hindsight's retrieval.
+Prepare a briefing for **Northstar Foods** and ask: `What did I promise, and has a later note confirmed it was completed?` With only the first meeting stored, the status should be **not recorded**.
+
+Now save a second meeting dated `2026-10-02`:
+
+- Notes: The customer confirmed receiving the rollout plan and prefers a two-week rollout.
+- Earlier promises: `Rollout plan — sent on 2026-10-01; customer confirmed receipt.`
+- New promises: `I will send the deployment checklist by 2026-10-05.`
+
+Prepare again with the same question. The briefing should now show the rollout plan as confirmed complete and the checklist as a new follow-up. Expand **Memory timeline and sources** to review the supporting notes in date order. Hindsight retrieval is probabilistic, so verify that the source memories and briefing match the records you entered.
+
+## Contact matching and data handling
+
+Each record includes the contact name and a normalized matching key, and the Reflect query requests memories only for that contact. This helps organize a shared memory bank, but prompt instructions are not an access-control boundary. Do not store sensitive customer information in a shared bank unless its access controls are appropriate for your use case. For production, enforce tenant/contact isolation in the data layer and test it with contacts that have similar names.
 
 ## Keep in mind
 

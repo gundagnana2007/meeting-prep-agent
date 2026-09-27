@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import date
 
 import streamlit as st
@@ -24,6 +25,11 @@ def source_text(source: object) -> str:
         if value:
             return str(value)
     return str(source)
+
+
+def source_date(source: object) -> str | None:
+    match = re.search(r"Meeting date:\s*(\d{4}-\d{2}-\d{2})", source_text(source), re.IGNORECASE)
+    return match.group(1) if match else None
 
 
 def credentials_error(api_key: str, bank_id: str) -> str | None:
@@ -156,6 +162,24 @@ with save_tab:
                 "They prefer a short product demo."
             ),
         )
+        previous_commitments = st.text_area(
+            "What happened to promises from earlier meetings?",
+            height=90,
+            placeholder=(
+                "Rollout plan: sent on Oct 1; the customer confirmed they received it.\n"
+                "Write 'not discussed' if nobody checked the status."
+            ),
+            help="Record an update only when someone confirmed it in this meeting. Leaving it blank means the status is unknown.",
+        )
+        new_commitments = st.text_area(
+            "New promises and follow-ups",
+            height=90,
+            placeholder=(
+                "I will send the deployment checklist by Oct 5.\n"
+                "The customer will confirm the rollout date."
+            ),
+            help="Include who owns each action and its due date when known.",
+        )
         save_clicked = st.form_submit_button("Save these notes to memory", type="primary")
 
     if save_clicked:
@@ -166,9 +190,14 @@ with save_tab:
             st.warning("Add the person or organization and some meeting notes first.")
         else:
             content = (
-                f"Meeting with: {contact.strip()}\n"
+                f"Meeting record\n"
+                f"Contact name exactly as entered: {contact.strip()}\n"
+                f"Contact matching key: {' '.join(contact.casefold().split())}\n"
                 f"Meeting date: {meeting_date.isoformat()}\n"
-                f"Notes: {notes.strip()}"
+                f"Conversation notes: {notes.strip()}\n"
+                f"Confirmed updates to earlier commitments: {previous_commitments.strip() or 'Not discussed or not recorded.'}\n"
+                f"New commitments and follow-ups (open when recorded unless stated otherwise): "
+                f"{new_commitments.strip() or 'None recorded.'}"
             )
             try:
                 with st.spinner("Saving this conversation to Hindsight…"):
@@ -177,7 +206,10 @@ with save_tab:
                         content=content,
                         context=f"Meeting notes with {contact.strip()} on {meeting_date.isoformat()}",
                     )
-                st.success(f"Saved notes about {contact.strip()} to your memory bank.")
+                st.success(
+                    f"Saved the {meeting_date.isoformat()} meeting with {contact.strip()}. "
+                    "Its commitment updates will be available in the next briefing."
+                )
                 st.session_state["last_saved_contact"] = contact.strip()
             except Exception as error:
                 st.error(f"Could not save the notes: {error}")
@@ -185,9 +217,37 @@ with save_tab:
 with prepare_tab:
     st.subheader("Get your context before the conversation")
     st.markdown(
-        '<p class="soft-note">Use the same person or organization name that you used when saving notes.</p>',
+        '<p class="soft-note">Use the same person or organization name. Each new meeting can update what was promised, completed, or left open.</p>',
         unsafe_allow_html=True,
     )
+
+    with st.expander("Try the two-meeting memory loop", expanded=False):
+        st.markdown(
+            """
+            **1. Save the first meeting** for `Northstar Foods` on `2026-09-27`.
+
+            - Notes: They are worried setup may interrupt their busy season and prefer a phased rollout.
+            - New promises: I will send a rollout plan by 2026-10-02.
+
+            **2. Prepare before the next meeting.** Use `Northstar Foods` and ask:  
+            `What did I promise, and has any later note confirmed it was completed?`
+
+            With only the first meeting saved, the briefing should say the completion status is not recorded.
+
+            **3. Save the follow-up meeting** for `Northstar Foods` on `2026-10-02`.
+
+            - Notes: The customer confirmed receiving the rollout plan and prefers a two-week rollout.
+            - Earlier promises: Rollout plan — sent on 2026-10-01; customer confirmed receipt.
+            - New promises: I will send the deployment checklist by 2026-10-05.
+
+            **4. Prepare again** for `Northstar Foods`. The new memory should change the briefing: the rollout plan is confirmed complete, while the checklist is a new open follow-up. Expand **Memory timeline and sources** to inspect the evidence.
+
+            **5. Check contact matching.** Save a note for a different company with a different preference, then prepare for `Northstar Foods` again. Check the answer and its source memories for cross-contact details. Also try a new name such as `Maple Labs`; the assistant should say it found no relevant notes.
+
+            This check can reveal a retrieval mistake. Contact-name instructions help the model focus, but they are not a substitute for separate access-controlled banks in a multi-customer production system.
+            """
+        )
+
     with st.form("prep_form"):
         prep_contact = st.text_input(
             "Who are you meeting?",
@@ -213,30 +273,43 @@ with prepare_tab:
         else:
             focus_text = custom_focus.strip() or focus
             query = (
-                f"Prepare a meeting briefing only from saved meeting memories clearly about "
-                f"this exact person or organization: {prep_contact.strip()}. Focus on: {focus_text}. "
-                "Ignore memories about any other person, company, project, incident, or topic. "
-                "Do not infer or invent dates, outcomes, reasons, promises, concerns, or decisions. "
-                "Only state a detail as confirmed if it is explicitly present in a matching meeting memory. "
-                "If there is no clearly matching meeting memory, say that no relevant notes were found. "
-                "Separate confirmed notes from suggestions. List promises, their concerns, decisions, "
-                "and open follow-ups. If a detail is absent, mark it not recorded."
+                f"Prepare a time-ordered meeting briefing using only memories clearly about "
+                f"this exact person or organization: {prep_contact.strip()} (matching key: {' '.join(prep_contact.casefold().split())}). "
+                f"Focus on: {focus_text}. Ignore memories about every other contact or topic. "
+                "Compare matching meeting records by date. Treat items in 'New commitments and follow-ups' "
+                "as open at the time of that meeting unless the note explicitly says otherwise. "
+                "Track them across later meetings: mark an older item completed only when a later note "
+                "explicitly confirms completion; mark it still open only when a note says it remains pending; "
+                "otherwise say its later status is not recorded. "
+                "For every status, include the meeting date and the supporting detail. "
+                "Describe how the customer's concerns or preferences changed over time, and distinguish "
+                "current statements from older ones. Do not treat silence as completion or assume an old "
+                "concern is still current. Do not invent dates, outcomes, reasons, promises, or decisions. "
+                "If no clearly matching memory exists, say no relevant notes were found. "
+                "Separate confirmed facts from suggestions, list decisions and open follow-ups, and mark "
+                "missing information as not recorded."
             )
             try:
                 with st.spinner("Finding the right conversation memories…"):
                     answer = connect(base_url, api_key).reflect(bank_id=bank_id.strip(), query=query)
                 st.markdown("### Your briefing")
                 st.markdown(
-                    '<div class="soft-note">Generated from memories associated with the selected contact. Review details before relying on them.</div>',
+                    '<div class="soft-note">Compare the dates and source memories. A promise is complete only when a later note explicitly confirms it.</div>',
                     unsafe_allow_html=True,
                 )
                 st.markdown(getattr(answer, "text", str(answer)))
 
                 sources = getattr(answer, "based_on", None)
                 if sources:
-                    with st.expander("🔎  See the memories used"):
-                        for source in sources:
-                            st.markdown(f"- {source_text(source)}")
+                    with st.expander("🧭  Memory timeline and sources"):
+                        ordered_sources = sorted(
+                            sources,
+                            key=lambda item: (source_date(item) is None, source_date(item) or ""),
+                        )
+                        for source in ordered_sources:
+                            meeting_date_label = source_date(source) or "Date not included"
+                            st.markdown(f"**Meeting: {meeting_date_label}**")
+                            st.markdown(source_text(source))
                 else:
                     st.info("Hindsight did not return source memories with this briefing.")
             except Exception as error:

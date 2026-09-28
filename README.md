@@ -1,12 +1,12 @@
 # Meeting Prep Agent
 
-A beginner-friendly web app that stores dated meeting records in Hindsight and uses Hindsight Reflect to prepare a briefing before a later meeting. It tracks what was promised, what a later conversation confirmed, and what remains unknown.
+A beginner-friendly meeting assistant that saves your notes in Hindsight, searches the public web for company hiring posts and company facts, and uses Hindsight Reflect to prepare a sourced plan before a later meeting.
 
-The interface uses a warm, matte palette with animated pastel accents. It has separate tabs for saving meeting notes and preparing for the next conversation.
+The interface pairs a conversational briefing screen with simple meeting-note capture. A contact-specific chat keeps each preparation conversation separate. The full meeting plan organizes recalled information into what happened, how to approach the meeting, key points to remember, promises, and questions to confirm. Users can search current hiring posts and company stats, rate a briefing after a meeting, and chart human-rated performance over time.
 
 ## Repository contents
 
-- `app.py` — Streamlit interface and Hindsight integration.
+- `app.py` — Streamlit chat interface, meeting-note capture, and Hindsight integration.
 - `requirements.txt` — Python dependencies.
 
 Article, social post, and video materials are kept separately from this code repository.
@@ -14,9 +14,13 @@ Article, social post, and video materials are kept separately from this code rep
 ## How the pieces work
 
 - **Streamlit** displays the form and briefing in a browser.
-- **Hindsight `retain`** saves each dated meeting record, including explicit updates to earlier commitments and new follow-ups.
+- **Hindsight `retain`** saves the user's dated meeting note as written, with a contact tag for later recall.
 - **Hindsight `retain`** tags each record with a stable, contact-specific identifier. **Hindsight `reflect`** applies a strict tag filter, then compares that contact's dated memories and prepares a briefing with dates, changes, and open questions.
-- The briefing marks a commitment complete only when a later note explicitly confirms it. The interface shows the memories used so you can check the evidence.
+- The meeting plan only marks a commitment complete when a later note explicitly confirms it. It separates recalled facts from suggestions and unknowns. The interface shows the retrieved source memories and date coverage so you can inspect the evidence.
+- If Hindsight returns no readable source memories, the app withholds the generated briefing and explains how to check the contact, bank, and older untagged notes.
+- Company research uses web metasearch to find current hiring posts and company facts/statistics. Each result shows its source link and snippet; users can inspect the source and explicitly save the dated result set to Hindsight as unverified public background. Search snippets can be incomplete or stale, so verify important claims at the linked source.
+- After a sourced briefing, users can save a 1–5 usefulness rating, meeting outcome, and correction. Hindsight retains the written review so later briefings can use it as guidance. A small local SQLite ledger stores only the contact tag, review date, and numeric score for a dependable chart; its file is excluded from Git.
+- Web search is provided by the `ddgs` package and needs an internet connection. Search-provider availability and result quality can vary.
 - The first version does not read calendars, send email, or schedule meetings.
 
 ## Requirements
@@ -42,18 +46,20 @@ Article, social post, and video materials are kept separately from this code rep
    ```
 
 4. In the browser, enter your Hindsight API key and bank ID in the sidebar. The app does not save these values in the project files.
-5. Save one or more meeting notes. Use the same person or organization name consistently.
-6. Enter that name under **Prepare for the next meeting** and click **Prepare my briefing**.
+5. Choose **Save meeting notes** and save one or more dated records. Use the same person or organization name consistently.
+6. Choose **Prepare for a meeting**, enter that name, and ask a natural-language question in the chat input.
+7. After reviewing a sourced briefing, open **How did this briefing hold up?** to save a rating and what happened. Use **Performance graph** to chart the local ratings and their recent average for the contact.
+8. Use **Research a company** to search for the company's current jobs and stats. Verify the source pages, then choose whether to save the dated results to the same contact's memory.
 
 Hindsight Cloud setup instructions are in the [Getting Started guide](https://docs.hindsight.vectorize.io/getting-started/). The API URL defaults to `https://api.hindsight.vectorize.io`; change it in the sidebar if you use another Hindsight instance.
 
 ## Try the two-meeting memory loop
 
-Use **Northstar Foods** for both records. Save a meeting dated `2026-09-27` with these notes:
+Use **Northstar Foods** for both records. Save a meeting dated `2026-09-27` with this note:
 
 > They are worried setup may interrupt their busy season and prefer a phased rollout.
 
-Under **New promises and follow-ups**, enter:
+Add this promise in the same note:
 
 > I will send a rollout plan by 2026-10-02.
 
@@ -61,9 +67,7 @@ Prepare a briefing for **Northstar Foods** and ask: `What did I promise, and has
 
 Now save a second meeting dated `2026-10-02`:
 
-- Notes: The customer confirmed receiving the rollout plan and prefers a two-week rollout.
-- Earlier promises: `Rollout plan — sent on 2026-10-01; customer confirmed receipt.`
-- New promises: `I will send the deployment checklist by 2026-10-05.`
+- Note: The customer confirmed receiving the rollout plan and prefers a two-week rollout. I will send the deployment checklist by 2026-10-05.
 
 Prepare again with the same question. The briefing should now show the rollout plan as confirmed complete and the checklist as a new follow-up. Expand **Memory timeline and sources** to review the supporting notes in date order. Hindsight retrieval is probabilistic, so verify that the source memories and briefing match the records you entered.
 
